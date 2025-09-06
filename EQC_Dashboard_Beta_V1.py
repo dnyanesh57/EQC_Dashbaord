@@ -206,7 +206,7 @@ def status_normalizer(x) -> str:
 # ----------------------------- Load data ----------------------------
 def load_data(file: Optional[io.BytesIO]) -> pd.DataFrame:
     if file is None:
-        default_path = "https://raw.githubusercontent.com/dnyanesh57/EQC_Dashbaord/main/data/CSV-REPORT-09-03-2025-11-35-00.csv"
+        default_path = "https://raw.githubusercontent.com/dnyanesh57/EQC_Dashbaord/main/data/CSV-REPORT-09-06-2025-06-46-26.csv"
         try:
             df = pd.read_csv(default_path)
         except Exception:
