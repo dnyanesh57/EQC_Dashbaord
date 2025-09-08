@@ -6,6 +6,7 @@
 
 import io
 import re
+import itertools  # <<< added
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -14,6 +15,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.express.colors import qualitative as qual  # kept just in case
 import streamlit as st
+
+# <<< added
+_plot_counter = itertools.count()
+def plot_key(prefix: str) -> str:
+    return f"{prefix}_{next(_plot_counter)}"
+# >>>
 
 pd.options.mode.copy_on_write = True
 st.set_page_config(page_title="DigiQC — EQC Dashboard (SJCPL)", page_icon="🛠️", layout="wide")
@@ -901,12 +908,12 @@ with tab_overview:
         status_counts, x="status", y="count", title="Status Distribution (current view)", text_auto=True,
         color="status", color_discrete_map=STATUS_COLOR_MAP
     )
-    c1.plotly_chart(fig1, use_container_width=True)
+    c1.plotly_chart(fig1, use_container_width=True, key=plot_key("overview_status"))
 
     tat_plot = df_view["tat_days"].dropna()
     if not tat_plot.empty:
         fig2 = px.histogram(tat_plot, nbins=30, title="Turnaround Time (days) — Distribution")
-        c2.plotly_chart(fig2, use_container_width=True)
+        c2.plotly_chart(fig2, use_container_width=True, key=plot_key("overview_tat_hist"))
     else:
         c2.info("No TAT data to plot.")
 
@@ -932,16 +939,16 @@ with tab_overview:
             fig_cfd = px.area(cfd, x="week", y="count", color="status",
                               title="Cumulative Flow by Week",
                               color_discrete_map=STATUS_COLOR_MAP)
-        st.plotly_chart(fig_cfd, use_container_width=True)
+        st.plotly_chart(fig_cfd, use_container_width=True, key=plot_key("overview_cfd"))
 
         fig4 = px.line(trend, x="week", y="median_tat", title="Weekly Median TAT (days)")
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True, key=plot_key("overview_weekly_median"))
 
         if df_view["tat_days"].notna().any():
             tmp["breach"] = (tmp["tat_days"] > st.session_state.get("sla_days_global", 3.0))
             slat = tmp.groupby("week")["breach"].sum().reset_index(name="breaches")
             fig_b = px.bar(slat, x="week", y="breaches", title="SLA Breaches per Week")
-            st.plotly_chart(fig_b, use_container_width=True)
+            st.plotly_chart(fig_b, use_container_width=True, key=plot_key("overview_sla_breaches"))
 
 with tab_status:
     proj = df_view.groupby(["project_norm", "status_norm"]).size().unstack(fill_value=0).reindex(columns=STATUS_KEYS, fill_value=0)
@@ -954,7 +961,7 @@ with tab_status:
     proj_melt = proj_top.melt(id_vars=["project_norm", "total"], value_vars=STATUS_KEYS, var_name="status", value_name="count")
     fig_ps = px.bar(proj_melt, x="project_norm", y="count", color="status", barmode="stack",
                     title="Project-wise EQC Status", color_discrete_map=STATUS_COLOR_MAP)
-    st.plotly_chart(fig_ps, use_container_width=True)
+    st.plotly_chart(fig_ps, use_container_width=True, key=plot_key("status_proj_stack"))
 
 with tab_explorer:
     st.subheader("Project → Location/Tower → Inspector → Status → EQC Explorer (URL-aware)")
@@ -1004,12 +1011,12 @@ with tab_explorer:
     st_counts = df_scope["status_norm"].value_counts().reindex(STATUS_KEYS, fill_value=0).rename_axis("status").reset_index(name="count")
     fig_scope_status = px.pie(st_counts, names="status", values="count", hole=0.55, title="Status mix (scope)",
                               color="status", color_discrete_map=STATUS_COLOR_MAP)
-    colV1.plotly_chart(fig_scope_status, use_container_width=True)
+    colV1.plotly_chart(fig_scope_status, use_container_width=True, key=plot_key("explorer_scope_status_pie"))
 
     tat_scope = df_scope["tat_days"].dropna()
     if not tat_scope.empty:
         fig_scope_tat = px.histogram(tat_scope, nbins=30, title="TAT distribution (stage-level scope)")
-        colV2.plotly_chart(fig_scope_tat, use_container_width=True)
+        colV2.plotly_chart(fig_scope_tat, use_container_width=True, key=plot_key("explorer_scope_tat_hist"))
     else:
         colV2.info("No TAT values in current scope.")
 
@@ -1041,7 +1048,7 @@ with tab_explorer:
                 )
                 fig_prog.update_yaxes(title=None, autorange="reversed")
                 fig_prog.update_layout(title="Status Progression (every APPROVED shown separately)", height=280)
-                st.plotly_chart(fig_prog, use_container_width=True)
+                st.plotly_chart(fig_prog, use_container_width=True, key=plot_key("explorer_status_progression"))
     else:
         st.info("Select an EQC to see URL-aware status & timelines.")
 
@@ -1132,7 +1139,7 @@ with tab_location:
                 hover_data=hover_data,
                 title="EQCs by Project → Tower → Floor → Type → Local place"
             )
-        st.plotly_chart(fig_h, use_container_width=True)
+        st.plotly_chart(fig_h, use_container_width=True, key=plot_key("loc_hierarchy"))
 
         # ---------- Details panel ----------
         st.markdown("### Details for a node (donut + top people)")
@@ -1157,7 +1164,7 @@ with tab_location:
                 hole=0.6, title="Current status mix (identities)",
                 color="current_status", color_discrete_map=STATUS_COLOR_MAP
             )
-            cL.plotly_chart(fig_donut, use_container_width=True)
+            cL.plotly_chart(fig_donut, use_container_width=True, key=plot_key("loc_node_status_donut"))
         else:
             cL.info("No identities for this node.")
 
@@ -1172,7 +1179,7 @@ with tab_location:
                         .value_counts().head(10).reset_index())
             top_insp.columns = ["inspector", "events"]
             fig_insp = px.bar(top_insp, x="inspector", y="events", title="Top Inspectors (events in node)")
-            cM.plotly_chart(fig_insp, use_container_width=True)
+            cM.plotly_chart(fig_insp, use_container_width=True, key=plot_key("loc_top_insp"))
         else:
             cM.info("No inspector data in node.")
 
@@ -1183,7 +1190,7 @@ with tab_location:
             if not top_app.empty:
                 top_app.columns = ["approver", "events"]
                 fig_app = px.bar(top_app, x="approver", y="events", title="Top Approvers (approved+pass in node)")
-                cR.plotly_chart(fig_app, use_container_width=True)
+                cR.plotly_chart(fig_app, use_container_width=True, key=plot_key("loc_top_approvers"))
             else:
                 cR.info("No approver rows (approved/pass) in this node.")
         else:
@@ -1257,7 +1264,7 @@ with tab_location:
                 },
                 title="Lifecycle Treemap — Project → Tower → Floor → Type → Place → Identity → Status"
             )
-            st.plotly_chart(fig_life_loc, use_container_width=True)
+            st.plotly_chart(fig_life_loc, use_container_width=True, key=plot_key("loc_lifecycle_treemap"))
 
             st.markdown("### Lifecycle node details (donut of TIME SHARE + top people)")
             life_keys = [k for k in ["project_norm","tower","floor","struct_type","place_local"] if k in segs_plot.columns]
@@ -1284,13 +1291,13 @@ with tab_location:
                         hole=0.6, title="Time share by status (duration)",
                         color="status_norm", color_discrete_map=STATUS_COLOR_MAP
                     )
-                    dL.plotly_chart(fig_donut_ts, use_container_width=True)
+                    dL.plotly_chart(fig_donut_ts, use_container_width=True, key=plot_key("loc_life_timeshare"))
 
                     top_insp_time = (life_node_df.groupby("inspector_norm")["duration_days"]
                                      .sum().sort_values(ascending=False).head(10).reset_index())
                     top_insp_time.columns = ["inspector", "days"]
                     fig_insp_time = px.bar(top_insp_time, x="inspector", y="days", title="Top Inspectors (by time in segments)")
-                    dM.plotly_chart(fig_insp_time, use_container_width=True)
+                    dM.plotly_chart(fig_insp_time, use_container_width=True, key=plot_key("loc_life_top_insp_time"))
 
                     life_ids = life_node_df["identity_loc"].unique().tolist()
                     events_life_node = df_locview[df_locview["identity_loc"].isin(life_ids)]
@@ -1301,7 +1308,7 @@ with tab_location:
                         if not top_app2.empty:
                             top_app2.columns = ["approver", "events"]
                             fig_app2 = px.bar(top_app2, x="approver", y="events", title="Top Approvers (approved+pass in node)")
-                            dR.plotly_chart(fig_app2, use_container_width=True)
+                            dR.plotly_chart(fig_app2, use_container_width=True, key=plot_key("loc_life_top_approvers"))
                         else:
                             dR.info("No approver rows (approved/pass) in this lifecycle node.")
                     else:
@@ -1322,7 +1329,7 @@ with tab_tower:
         top_melt = top_towers.melt(id_vars=["tower","total"], value_vars=STATUS_KEYS, var_name="status", value_name="count")
         fig = px.bar(top_melt, x="tower", y="count", color="status", barmode="stack",
                      title="Tower-wise EQC (stacked)", color_discrete_map=STATUS_COLOR_MAP)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=plot_key("tower_stacked"))
     else:
         st.info("Tower column not available.")
 
@@ -1345,17 +1352,17 @@ with tab_user:
 
         primary_y = "approved" if "approved" in usr_top.columns else STATUS_KEYS[0]
         fig_u1 = px.bar(usr_top, x="inspector_norm", y=primary_y, title=f"Top Inspectors by {primary_y.title()}", text_auto=True)
-        st.plotly_chart(fig_u1, use_container_width=True)
+        st.plotly_chart(fig_u1, use_container_width=True, key=plot_key("user_top_by_primary"))
 
         fig_u2 = px.bar(usr_top, x="inspector_norm", y="median_tat", title="Median TAT (stage) by Inspector", text_auto=True)
-        st.plotly_chart(fig_u2, use_container_width=True)
+        st.plotly_chart(fig_u2, use_container_width=True, key=plot_key("user_median_tat"))
 
         usr_melt = usr_top.melt(id_vars=["inspector_norm", "total", "median_tat"],
                                 value_vars=STATUS_KEYS, var_name="status", value_name="count")
         fig_u3 = px.bar(usr_melt, x="inspector_norm", y="count", color="status",
                         barmode="stack", title="User-wise Status Mix",
                         color_discrete_map=STATUS_COLOR_MAP_PASTEL, category_orders={"status": STATUS_KEYS})
-        st.plotly_chart(fig_u3, use_container_width=True)
+        st.plotly_chart(fig_u3, use_container_width=True, key=plot_key("user_status_mix"))
 
         # --- New: Redo/Rejected by Stage (per Inspector) ---
         st.markdown("### Redo/Rejected by Stage (per Inspector)")
@@ -1393,7 +1400,7 @@ with tab_user:
                             category_orders={"status_norm": ["redo", "rejected"]}
                         )
                         fig_urr.update_layout(xaxis_title="Stage", yaxis_title="Events")
-                        st.plotly_chart(fig_urr, use_container_width=True)
+                        st.plotly_chart(fig_urr, use_container_width=True, key=plot_key("user_redo_rej_single"))
             else:
                 chosen = st.multiselect("Inspectors", options=inspectors_all, default=default_users[:6] if default_users else [])
                 if not chosen:
@@ -1418,7 +1425,7 @@ with tab_user:
                             category_orders={"status_norm": ["redo", "rejected"]}
                         )
                         fig_urr_multi.update_layout(xaxis_title="Stage", yaxis_title="Events", bargap=0.15)
-                        st.plotly_chart(fig_urr_multi, use_container_width=True)
+                        st.plotly_chart(fig_urr_multi, use_container_width=True, key=plot_key("user_redo_rej_multi"))
 
         st.markdown("### 🔎 Stage Matrix — Redo/Rejected by Stage (per Inspector)")
         rr = df_view[df_view["status_norm"].isin(["redo", "rejected"])].copy()
@@ -1436,7 +1443,7 @@ with tab_user:
                 color_continuous_scale=[[0, SJCPL["WHITE"]], [1, SJCPL["BLUE"]]],
                 height=600, width=800
             )
-            st.plotly_chart(fig_heat, use_container_width=True)
+            st.plotly_chart(fig_heat, use_container_width=True, key=plot_key("user_stage_heatmap"))
         else:
             st.info("No redo/rejected data to render the stage matrix.")
     else:
@@ -1456,7 +1463,7 @@ with tab_activity:
             x="activity", y="count", color="status", barmode="stack", title="Activity-wise EQC (stacked)",
             color_discrete_map=STATUS_COLOR_MAP
         )
-        st.plotly_chart(fig_a0, use_container_width=True)
+        st.plotly_chart(fig_a0, use_container_width=True, key=plot_key("activity_stacked"))
 
         fail_df = df_view[df_view["status_norm"].isin(["rejected", "redo"])]
         pareto = fail_df.groupby("activity").size().sort_values(ascending=False).rename("count").reset_index()
@@ -1471,7 +1478,7 @@ with tab_activity:
                 yaxis=dict(title="Count"),
                 yaxis2=dict(title="Cumulative %", overlaying="y", side="right", range=[0, 100]),
             )
-            st.plotly_chart(fig_p, use_container_width=True)
+            st.plotly_chart(fig_p, use_container_width=True, key=plot_key("activity_pareto"))
         else:
             st.info("No rejected/redo records to plot Pareto.")
     else:
@@ -1509,7 +1516,7 @@ with tab_timelines:
             fig_gl.update_yaxes(autorange="reversed", title=None)
             fig_gl.add_vline(x=now, line_dash="dot", line_color=SJCPL["GREY"])
             fig_gl.update_layout(title=f"Timeline — grouped by {group_by}", height=500)
-            st.plotly_chart(fig_gl, use_container_width=True)
+            st.plotly_chart(fig_gl, use_container_width=True, key=plot_key("timelines_grouped"))
         else:
             st.info("No rows to plot in timeline.")
     else:
@@ -1523,7 +1530,7 @@ with tab_timelines:
             hover_data=[c for c in ["identity_label", "eqc_id", "location_path", "inspector_norm", "activity", "project_norm"] if c in wip.columns],
             title="WIP Aging — In-process stage entries"
         )
-        st.plotly_chart(fig_age, use_container_width=True)
+        st.plotly_chart(fig_age, use_container_width=True, key=plot_key("timelines_wip_age"))
     else:
         st.info("No in-process items for WIP Aging scatter.")
 
@@ -1612,7 +1619,7 @@ with tab_life:
                 },
                 title="Lifecycle Treemap (URL-based identity; each APPROVED separate)"
             )
-            st.plotly_chart(fig_life, use_container_width=True)
+            st.plotly_chart(fig_life, use_container_width=True, key=plot_key("life_treemap"))
 
             st.markdown("#### Time share by status (filtered scope)")
             share = (segs_plot.groupby("status_norm")["duration_days"].sum()
@@ -1622,7 +1629,7 @@ with tab_life:
             fig_share = px.bar(share, x="status_norm", y="pct", text_auto=".1f",
                                color="status_norm", color_discrete_map=STATUS_COLOR_MAP,
                                title="Share of time spent in each status (%)")
-            st.plotly_chart(fig_share, use_container_width=True)
+            st.plotly_chart(fig_share, use_container_width=True, key=plot_key("life_share"))
 
             st.markdown("### Lifecycle details (donut of TIME SHARE + top people)")
             life_keys = [k for k in ["project_norm","tower"] if k in segs_plot.columns]
@@ -1647,13 +1654,13 @@ with tab_life:
                     hole=0.6, title="Time share by status (selected node)",
                     color="status_norm", color_discrete_map=STATUS_COLOR_MAP
                 )
-                eL.plotly_chart(fig_donut2, use_container_width=True)
+                eL.plotly_chart(fig_donut2, use_container_width=True, key=plot_key("life_node_timeshare"))
 
                 top_insp_ts2 = (life_node_df2.groupby("inspector_norm")["duration_days"]
                                 .sum().sort_values(ascending=False).head(10).reset_index())
                 top_insp_ts2.columns = ["inspector", "days"]
                 fig_insp2 = px.bar(top_insp_ts2, x="inspector", y="days", title="Top Inspectors (by time in node)")
-                eM.plotly_chart(fig_insp2, use_container_width=True)
+                eM.plotly_chart(fig_insp2, use_container_width=True, key=plot_key("life_node_top_insp"))
 
                 life_ids2 = life_node_df2["identity_loc"].unique().tolist()
                 events_life_node2 = df[df["identity_key"].isin(life_ids2)] if "identity_key" in df.columns else df_raw[df_raw["identity_loc"].isin(life_ids2)]
@@ -1669,7 +1676,7 @@ with tab_life:
                     if not top_app3.empty:
                         top_app3.columns = ["approver", "events"]
                         fig_app3 = px.bar(top_app3, x="approver", y="events", title="Top Approvers (approved+pass in node)")
-                        eR.plotly_chart(fig_app3, use_container_width=True)
+                        eR.plotly_chart(fig_app3, use_container_width=True, key=plot_key("life_node_top_approvers"))
                     else:
                         eR.info("No approver rows (approved/pass) in this node.")
                 else:
